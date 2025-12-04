@@ -44,7 +44,7 @@ When creating a playlist:
 You MUST respond with valid JSON matching this exact schema:
 {{
     "theme_name": "the theme name",
-    "collection_name": "A descriptive name for the collection in ErsatzTV",
+    "collection_name": "Short collection name (max 50 chars)",
     "selected_movies": ["Movie Title 1 (Year)", "Movie Title 2 (Year)", ...],
     "selected_shows": ["Show Title 1", "Show Title 2", ...],
     "selected_anime": ["Anime Title 1", "Anime Title 2", ...],
@@ -56,7 +56,8 @@ IMPORTANT:
 - Only include titles that EXACTLY match titles in the provided media library
 - Include the year in parentheses for movies
 - Leave arrays empty if no matching content for that category
-- Ensure estimated_runtime is calculated from the selected content"""
+- Ensure estimated_runtime is calculated from the selected content
+- Collection name MUST be 50 characters or less"""
 
     def __init__(self, config: AgentConfig):
         self.config = config
@@ -156,21 +157,24 @@ Respond with valid JSON only."""
                 print("No titles selected for collection")
                 return False
 
+            # Truncate collection name to 50 chars (ErsatzTV limit)
+            collection_name = suggestion.collection_name[:50]
+
             # Check if collection already exists
             existing = self.ersatztv.get_smart_collections()
             existing_names = {c.name: c.id for c in existing}
 
-            if suggestion.collection_name in existing_names:
+            if collection_name in existing_names:
                 # Update existing collection
                 result = self.ersatztv.update_smart_collection(
-                    collection_id=existing_names[suggestion.collection_name],
-                    name=suggestion.collection_name,
+                    collection_id=existing_names[collection_name],
+                    name=collection_name,
                     query=query,
                 )
             else:
                 # Create new collection
                 result = self.ersatztv.create_smart_collection(
-                    name=suggestion.collection_name,
+                    name=collection_name,
                     query=query,
                 )
 
