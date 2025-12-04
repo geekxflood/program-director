@@ -2,12 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Copy source code first (needed for pip install with pyproject.toml)
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
-
-# Copy application code
 COPY playlist_agent/ playlist_agent/
+
+# Install dependencies
+RUN pip install --no-cache-dir .
 
 # Create non-root user
 RUN useradd -r -u 1000 playlist-agent && \
