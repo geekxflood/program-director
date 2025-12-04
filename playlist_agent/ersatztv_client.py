@@ -84,9 +84,11 @@ class ErsatzTVClient:
     def create_smart_collection(self, name: str, query: str) -> SmartCollection | None:
         """Create a new smart collection."""
         try:
+            # ErsatzTV API uses /api/collections/smart/new for creating
+            # and expects Query and Name (capitalized)
             data = self._post(
-                "/api/collections/smart",
-                {"name": name, "query": query},
+                "/api/collections/smart/new",
+                {"Name": name, "Query": query},
             )
             return SmartCollection(
                 id=data.get("id", 0),
