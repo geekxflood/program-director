@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copy source code first (needed for pip install with pyproject.toml)
-COPY pyproject.toml .
+# Copy all project files (pyproject.toml references README.md)
+COPY pyproject.toml README.md LICENSE ./
 COPY playlist_agent/ playlist_agent/
 
 # Install dependencies
