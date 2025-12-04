@@ -41,6 +41,9 @@ class ErsatzTVClient:
         """Make a POST request to the API."""
         url = f"{self.base_url}{endpoint}"
         response = self.client.post(url, json=data)
+        if response.status_code >= 400:
+            print(f"POST {endpoint} failed: {response.status_code}")
+            print(f"Response: {response.text}")
         response.raise_for_status()
         return response.json()
 

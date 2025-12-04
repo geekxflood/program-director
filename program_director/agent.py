@@ -18,11 +18,11 @@ class PlaylistSuggestion(BaseModel):
 
     theme_name: str = Field(description="Name of the theme")
     collection_name: str = Field(description="Name for the ErsatzTV smart collection")
-    selected_movies: list[str] = Field(description="List of selected movie titles")
-    selected_shows: list[str] = Field(description="List of selected TV show titles")
-    selected_anime: list[str] = Field(description="List of selected anime titles")
-    reasoning: str = Field(description="Why these titles were selected for the theme")
-    estimated_runtime: int = Field(description="Estimated runtime in minutes")
+    selected_movies: list[str] = Field(default_factory=list, description="List of selected movie titles")
+    selected_shows: list[str] = Field(default_factory=list, description="List of selected TV show titles")
+    selected_anime: list[str] = Field(default_factory=list, description="List of selected anime titles")
+    reasoning: str = Field(default="", description="Why these titles were selected for the theme")
+    estimated_runtime: int = Field(default=0, description="Estimated runtime in minutes")
 
 
 class PlaylistAgent:
