@@ -29,7 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scan` - Display media library statistics
   - Detailed information mode
   - Source-specific scanning
-- `serve` - HTTP server mode (prepared for future implementation)
+- `serve` - HTTP server mode with RESTful API and scheduler
+  - Configurable HTTP port
+  - Optional cron scheduler for automated generation
+  - Prometheus metrics endpoint
+  - Health and readiness checks
+- `trakt` - Trakt.tv media exploration commands
+  - Trending movies and shows
+  - Popular content discovery
+  - Search functionality
 - `version` - Display version and build information
 
 #### Structured Logging
@@ -59,7 +67,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Radarr Client**: Movie library integration
 - **Sonarr Client**: TV/anime library integration
 - **Tunarr Client**: Channel programming management
+- **Trakt Client**: Media metadata and trending content integration
+  - Full API v2 support
+  - Trending and popular content
+  - Search functionality
+  - Movie and show details
 - **Ollama Client**: LLM integration for intelligent selection
+
+#### HTTP API Server
+- RESTful API endpoints for all operations
+- Health and readiness checks
+- Prometheus metrics export
+- Media listing and synchronization endpoints
+- Theme management and generation endpoints
+- Play history and cooldown tracking endpoints
+- Webhook support for automation
+- Graceful shutdown with timeout
+- JSON response format
+- Configurable timeouts and ports
+
+#### Scheduler
+- Cron-based automated playlist generation
+- Configurable schedule per theme
+- Panic recovery and logging
+- Manual trigger support
+- Status reporting (next run, job count)
+- Integration with serve command
+- Default schedule: daily at 2 AM
 
 #### Database
 - Abstract database interface supporting multiple drivers
@@ -75,13 +109,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test coverage reporting via Codecov
 - Table-driven test patterns
 
+#### Kubernetes & Deployment
+- Comprehensive Helm chart for Kubernetes deployment
+  - Full manifest templates (Deployment, Service, ConfigMap, Secret, etc.)
+  - PersistentVolumeClaim for SQLite data
+  - Ingress with TLS support
+  - ServiceMonitor for Prometheus Operator
+  - HorizontalPodAutoscaler support
+  - Security contexts (non-root, read-only filesystem)
+  - Resource requests and limits
+  - Health probes configuration
+- ArgoCD ApplicationSet for GitOps deployment
+  - Multi-environment support (production, staging)
+  - Automatic sync and self-healing
+  - Retry logic with exponential backoff
+  - Notification support
+- Environment-specific values files
+  - Production configuration with HA
+  - Staging configuration for testing
+- Complete Helm chart documentation
+
 #### CI/CD
 - GitHub Actions workflow for automated builds
-- Multi-platform Docker image builds
-- Automated testing with race detection
-- Linting with `go fmt` and `go vet`
+- Multi-platform Docker image builds (amd64, arm64)
+- Automated testing with race detection and coverage
+- golangci-lint for comprehensive linting (20+ linters)
+- gosec for security scanning with SARIF upload
 - Docker image publishing to GHCR
-- Semantic versioning support
+- Release workflow triggered by semver tags
+- Automatic release note generation from CHANGELOG
+- SBOM generation and upload
 
 ### Changed
 - **Breaking**: Migrated from Python to Go - incompatible with previous Python version
