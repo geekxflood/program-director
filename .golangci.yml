@@ -1,0 +1,152 @@
+# golangci-lint configuration
+# See https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+output:
+  format: colored-line-number
+  sort-results: true
+
+linters:
+  enable:
+    # Enabled by default
+    - errcheck    # Check for unchecked errors
+    - gosimple    # Simplify code
+    - govet       # Vet examines Go source code
+    - ineffassign # Detect ineffectual assignments
+    - staticcheck # Static analysis
+    - typecheck   # Type check
+    - unused      # Checks for unused constants, variables, functions and types
+
+    # Additional linters
+    - gofmt       # Check formatting
+    - goimports   # Check imports
+    - misspell    # Find commonly misspelled English words
+    - unconvert   # Remove unnecessary type conversions
+    - unparam     # Find unused function parameters
+    - goconst     # Find repeated strings that could be constants
+    - gocyclo     # Cyclomatic complexity
+    - dupl        # Code clone detection
+    - gosec       # Security problems
+    - revive      # Replacement for golint
+    - stylecheck  # Stylecheck is a replacement for golint
+    - prealloc    # Find slice declarations that could pre-allocate
+    - exportloopref # Check for pointers to enclosing loop variables
+
+  disable:
+    - exhaustive   # Can be too strict
+    - exhaustruct  # Too strict for this project
+    - funlen       # Not always applicable
+    - gochecknoglobals # We use some globals intentionally
+    - gocognit     # Too strict
+    - gomnd        # Too many false positives
+    - lll          # Line length checked differently
+    - nlreturn     # Style preference
+    - wsl          # Whitespace linter too opinionated
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - (*database/sql.DB).Close
+      - (*database/sql.Rows).Close
+
+  govet:
+    enable-all: true
+    disable:
+      - shadow
+
+  gocyclo:
+    min-complexity: 15
+
+  dupl:
+    threshold: 100
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/geekxflood/program-director
+
+  gosec:
+    severity: medium
+    confidence: medium
+    excludes:
+      - G107 # URL provided to HTTP request as taint input
+      - G204 # Subprocess launched with variable (used for tests)
+
+  stylecheck:
+    checks: ["all", "-ST1003"] # ST1003: underscores in Go names
+
+  revive:
+    confidence: 0.8
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - dupl
+        - gosec
+        - goconst
+
+    # Exclude some staticcheck messages
+    - linters:
+        - staticcheck
+      text: "SA9003:"
+
+    # Exclude lll issues for long lines with go:generate
+    - linters:
+        - lll
+      source: "^//go:generate "
+
+  # Show all issues
+  exclude: []
+
+severity:
+  default-severity: error
+  rules:
+    - linters:
+        - dupl
+        - goconst
+      severity: warning
