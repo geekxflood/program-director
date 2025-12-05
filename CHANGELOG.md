@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit tests for HTTP server handlers (5.9% coverage)
 
 ### Changed
+- Minimum Go version updated to 1.23
+- Updated CLAUDE.md with comprehensive documentation for all v1.0.0 features
 
 ### Fixed
 

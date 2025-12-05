@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Program Director is an AI-powered TV channel programmer written in Go that curates themed programming for Tunarr channels. It uses Ollama (local LLM) to intelligently select media from Radarr/Sonarr based on themes, with database-backed caching and cooldown management.
 
+**Version**: 1.0.0
+**Language**: Go 1.23+
+**Architecture**: Microservice-ready with HTTP API, Kubernetes support, and GitOps deployment
+
 ## Development Commands
 
 ### Building and Running
@@ -85,10 +89,15 @@ docker run --rm \
 
 ```bash
 # Sync media from Radarr/Sonarr to database
-program-director sync
+program-director sync                              # Sync all media
+program-director sync --movies-only                # Movies only
+program-director sync --series-only                # TV shows only
+program-director sync --cleanup                    # Remove deleted media
 
 # Scan and display media statistics
-program-director scan
+program-director scan                              # Show statistics
+program-director scan --detailed                   # Detailed breakdown
+program-director scan --source radarr              # Specific source only
 
 # Generate playlists
 program-director generate --theme sci-fi-night     # Single theme
@@ -96,7 +105,16 @@ program-director generate --all-themes             # All themes
 program-director generate --theme horror --dry-run # Preview only
 
 # Run as HTTP server with scheduler
-program-director serve
+program-director serve                             # Start server
+program-director serve --port 8080                 # Custom port
+program-director serve --enable-scheduler          # Enable cron scheduler
+program-director serve --schedule "0 2 * * *"      # Custom schedule
+
+# Explore Trakt.tv content
+program-director trakt trending --movies           # Trending movies
+program-director trakt trending --shows            # Trending shows
+program-director trakt popular --movies --limit 20 # Top 20 popular movies
+program-director trakt search "inception"          # Search content
 
 # Show version
 program-director version
@@ -107,13 +125,27 @@ program-director version
 ### High-Level Data Flow
 
 ```text
-Radarr/Sonarr → Sync → Database → Generator → [Scorer + LLM] → Tunarr
-                         ↓                          ↓
-                   Media Cache              Cooldown Manager
+┌─────────────────────────────────────────────────────────────────────┐
+│                         HTTP API Server (Optional)                   │
+│  ┌────────────┐    ┌──────────────┐    ┌────────────────────────┐  │
+│  │ REST API   │    │  Scheduler   │    │  Prometheus Metrics    │  │
+│  │ Endpoints  │    │  (Cron Jobs) │    │  /metrics              │  │
+│  └────────────┘    └──────────────┘    └────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Core Services                                │
+│                                                                       │
+│  Radarr/Sonarr → Sync → Database → Generator → [Scorer + LLM] → Tunarr │
+│                  Trakt →    ↓                       ↓                 │
+│                         Media Cache         Cooldown Manager          │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 The workflow:
 
+**CLI Mode:**
 1. User runs `sync` command to populate database with media metadata
 2. User configures themes in `config.yaml` with channel IDs and criteria
 3. User runs `generate` command for themes
@@ -123,6 +155,20 @@ The workflow:
 7. `Generator` applies playlist to Tunarr channel via API
 8. `CooldownManager` tracks plays to prevent repetition
 
+**Server Mode:**
+1. User runs `serve` command to start HTTP server
+2. Optional cron scheduler triggers automatic generation per theme
+3. HTTP API exposes all operations (sync, generate, scan, history, cooldowns)
+4. Prometheus metrics available at `/metrics` endpoint
+5. Health checks at `/health` and `/ready` for Kubernetes
+6. Graceful shutdown on SIGINT/SIGTERM signals
+
+**Trakt Integration:**
+- Explore trending and popular movies/shows
+- Search for content
+- Retrieve detailed media information
+- Optional - no API key required for basic features
+
 ### Module Responsibilities
 
 **[cmd/root.go](cmd/root.go)** - CLI framework
@@ -130,7 +176,7 @@ The workflow:
 - Cobra-based command structure
 - Configuration loading with Viper
 - Global flags: `--config`, `--debug`, `--db-driver`
-- Subcommands: `generate`, `sync`, `scan`, `serve`, `version`
+- Subcommands: `generate`, `sync`, `scan`, `serve`, `trakt`, `version`
 - Persistent pre-run hook for config initialization
 
 **[cmd/generate.go](cmd/generate.go)** - Playlist generation command
@@ -142,30 +188,45 @@ The workflow:
 
 **[cmd/sync.go](cmd/sync.go)** - Media synchronization command
 
+- Flags: `--movies-only`, `--series-only`, `--cleanup`
 - Fetches media from Radarr/Sonarr APIs
 - Stores/updates media metadata in database
-- Reports sync statistics
+- Reports sync statistics (new, updated, unchanged)
+- Optional cleanup of deleted media
 
 **[cmd/scan.go](cmd/scan.go)** - Media library inspection
 
+- Flags: `--detailed`, `--source`
 - Displays database statistics
 - Shows media counts by type, genre, rating
 - Useful for verifying sync results
 
 **[cmd/serve.go](cmd/serve.go)** - HTTP server mode
 
-- Runs HTTP server on configured port
+- Flags: `--port`, `--enable-scheduler`, `--schedule`, `--dry-run`
+- Runs HTTP server on configured port (default: 8080)
 - Optional built-in cron scheduler for automatic generation
-- Graceful shutdown support
-- Health check endpoints
+- Initializes all services (database, clients, sync, scorer, generator)
+- Graceful shutdown support with context cancellation
+- Health and readiness check endpoints
+
+**[cmd/trakt.go](cmd/trakt.go)** - Trakt.tv integration
+
+- Subcommands: `trending`, `popular`, `search`
+- Flags: `--movies`, `--shows`, `--limit`
+- Explores trending and popular content
+- Searches for movies and TV shows
+- Displays detailed media information
+- Optional - no API key validation required
 
 **[internal/config/config.go](internal/config/config.go)** - Configuration management
 
 - Viper-based configuration with YAML file + environment variables
-- Structures: `Config`, `DatabaseConfig`, `RadarrConfig`, `SonarrConfig`, `TunarrConfig`, `OllamaConfig`, `ThemeConfig`, `CooldownConfig`, `ServerConfig`
-- Environment variables override YAML values
+- Structures: `Config`, `DatabaseConfig`, `RadarrConfig`, `SonarrConfig`, `TunarrConfig`, `TraktConfig`, `OllamaConfig`, `ThemeConfig`, `CooldownConfig`, `ServerConfig`
+- Environment variables override YAML values with `PROGRAMDIR_` prefix
 - Validation ensures required fields present
 - Default config search paths: `.`, `./configs`, `/etc/program-director`, `~/.config/program-director`
+- Trakt config optional (client_id and client_secret)
 
 **[internal/database/](internal/database/)** - Database layer
 
@@ -206,6 +267,14 @@ The workflow:
 - Streaming and non-streaming response support
 - Configurable temperature, context window
 
+**[internal/clients/trakt/client.go](internal/clients/trakt/client.go)** - Trakt.tv API
+
+- HTTP client for Trakt API v2
+- Methods: `GetMovie()`, `GetShow()`, `GetTrendingMovies()`, `GetTrendingShows()`, `GetPopularMovies()`, `GetPopularShows()`, `Search()`
+- API key authentication via headers (trakt-api-key, trakt-api-version)
+- 30-second timeout
+- Returns rich metadata: ratings, genres, runtime, year, IDs (TMDB, IMDB, Trakt)
+
 **[internal/services/media/sync.go](internal/services/media/sync.go)** - Media synchronization
 
 - `Syncer` service coordinates Radarr/Sonarr fetching
@@ -245,12 +314,103 @@ The workflow:
 - Cooldown periods configurable by type (movies, series, anime)
 - Database-backed for persistence across runs
 
+**[internal/server/server.go](internal/server/server.go)** - HTTP server
+
+- `Server` struct manages HTTP server lifecycle
+- Methods: `Start()`, `Stop()`, `setupRoutes()`
+- Integrates all services (database, sync, generator, cooldown)
+- Graceful shutdown with configurable timeout
+- Context cancellation support
+- Configurable port (default: 8080)
+
+**[internal/server/handlers.go](internal/server/handlers.go)** - HTTP handlers
+
+- RESTful API endpoints (12 handlers)
+- Health checks: `GET /health`, `GET /ready`
+- Metrics: `GET /metrics` (Prometheus format)
+- Media: `GET /api/v1/media`, `POST /api/v1/media/sync`
+- Themes: `GET /api/v1/themes`, `POST /api/v1/generate`
+- History: `GET /api/v1/history`
+- Cooldowns: `GET /api/v1/cooldowns`
+- JSON responses with success/error structure
+- Proper HTTP status codes and error handling
+
+**[internal/scheduler/scheduler.go](internal/scheduler/scheduler.go)** - Cron scheduler
+
+- `Scheduler` struct wraps robfig/cron/v3
+- Methods: `Start()`, `Stop()`, `GetStatus()`, `GetNextRun()`
+- Configurable cron expressions (default: "0 2 * * *")
+- Automatic playlist generation per theme schedule
+- Panic recovery and error logging
+- Integration with serve command
+- Context-aware shutdown
+
 **[pkg/models/media.go](pkg/models/media.go)** - Domain models
 
 - `Media`: Core media entity (ID, title, year, genres, ratings, runtime, path, etc.)
 - `MediaWithScore`: Media + similarity score + match reason
 - `Playlist`: Collection of media items for a theme
 - Shared across all services
+
+## HTTP API Endpoints
+
+When running in server mode (`program-director serve`), the following REST API endpoints are available:
+
+### Health & Monitoring
+
+- `GET /health` - Health check (always returns 200 OK with version info)
+- `GET /ready` - Readiness check (checks database connectivity)
+- `GET /metrics` - Prometheus metrics (media counts, generation stats)
+
+### Media Management
+
+- `GET /api/v1/media` - List all media from database
+  - Query params: `type` (movie/series/anime), `limit`, `offset`
+  - Returns: Array of media objects with metadata
+
+- `POST /api/v1/media/sync` - Trigger media synchronization
+  - Body: `{"movies": true, "series": true, "cleanup": false}`
+  - Returns: Sync statistics (new, updated, unchanged)
+
+### Theme & Generation
+
+- `GET /api/v1/themes` - List all configured themes
+  - Returns: Theme configurations with counts
+
+- `POST /api/v1/generate` - Generate playlists
+  - Body: `{"theme": "theme-name", "dry_run": false}` or `{"all_themes": true}`
+  - Returns: Generation results with statistics
+
+### History & Cooldowns
+
+- `GET /api/v1/history` - Get play history
+  - Query params: `channel_id`, `theme`, `limit`
+  - Returns: Array of play history records
+
+- `GET /api/v1/cooldowns` - Get active cooldowns
+  - Returns: Array of media IDs currently on cooldown
+
+### Response Format
+
+All API responses follow this structure:
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "error": null
+}
+```
+
+Error responses:
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "Error message"
+}
+```
 
 ## Key Implementation Details
 
@@ -303,9 +463,93 @@ All services implement proper cleanup:
 - Context cancellation propagates through call chains
 - Graceful shutdown on signals
 
+## Kubernetes Deployment
+
+### Helm Chart
+
+The project includes a comprehensive Helm chart in `charts/program-director/`:
+
+**Chart Structure:**
+- `Chart.yaml` - Chart metadata (version 1.0.0, appVersion 1.0.0)
+- `values.yaml` - Default configuration
+- `values-production.yaml` - Production overrides
+- `values-staging.yaml` - Staging overrides
+- `templates/` - Kubernetes manifests
+
+**Key Features:**
+- Deployment with security contexts (non-root, read-only filesystem)
+- Service (ClusterIP, NodePort, or LoadBalancer)
+- ConfigMap for application configuration
+- Secret for sensitive data (API keys)
+- PersistentVolumeClaim for SQLite data
+- Ingress with TLS support
+- ServiceMonitor for Prometheus Operator
+- HorizontalPodAutoscaler for auto-scaling
+- Health and readiness probes
+
+**Installation:**
+
+```bash
+# Install with default values
+helm install program-director ./charts/program-director
+
+# Install with custom values
+helm install program-director ./charts/program-director \
+  --values ./charts/program-director/values-production.yaml
+
+# Upgrade existing installation
+helm upgrade program-director ./charts/program-director
+
+# Uninstall
+helm uninstall program-director
+```
+
+### ArgoCD GitOps
+
+The `argocd/applicationset.yaml` provides multi-environment deployment:
+
+**Features:**
+- List generator for production and staging environments
+- Automatic sync with prune and self-heal
+- Retry logic with exponential backoff
+- Environment-specific value files
+- Notification support
+
+**Deployment:**
+
+```bash
+# Apply ApplicationSet
+kubectl apply -f argocd/applicationset.yaml
+
+# Verify applications
+argocd app list
+argocd app get program-director-production
+```
+
+### Configuration
+
+**Required Secrets:**
+```yaml
+radarr:
+  apiKey: "your-radarr-api-key"
+sonarr:
+  apiKey: "your-sonarr-api-key"
+```
+
+**Optional Configuration:**
+```yaml
+trakt:
+  clientId: "your-trakt-client-id"
+  clientSecret: "your-trakt-client-secret"
+```
+
+**Database:**
+- SQLite: Use PersistentVolume for data persistence
+- PostgreSQL: Configure external database connection
+
 ## Code Style
 
-- **Language**: Go 1.22+
+- **Language**: Go 1.23+
 - **Formatting**: `go fmt` (enforced)
 - **Linting**: golangci-lint (recommended)
 - **Imports**: Group stdlib, external, internal
@@ -315,23 +559,76 @@ All services implement proper cleanup:
 
 ## Testing
 
-- Framework: Go standard `testing` package
-- Currently minimal test coverage - needs expansion
-- When adding tests:
-  - Place in `*_test.go` files alongside source
-  - Use table-driven tests for multiple cases
-  - Mock external dependencies (Radarr, Sonarr, Tunarr, Ollama)
-  - Use `testify/assert` for assertions (optional)
+### Testing Strategy
+
+- **Framework**: Go standard `testing` package
+- **Coverage**: 15-42% coverage across new features
+- **Approach**: Table-driven tests with httptest for HTTP clients
+
+### Existing Tests
+
+**Trakt Client** (`internal/clients/trakt/client_test.go`) - 34.5% coverage:
+- `TestNew` - Client initialization
+- `TestGetMovie` - Movie retrieval with mock server
+- `TestGetTrendingMovies` - Trending movies endpoint
+- `TestSearch` - Search functionality
+- `TestDoRequestError` - Error handling
+
+**Scheduler** (`internal/scheduler/scheduler_test.go`) - 42.6% coverage:
+- `TestNewScheduler` - Scheduler creation
+- `TestGetStatus` - Status reporting
+- `TestSchedulerStartStop` - Lifecycle management
+- `TestGetNextRun` - Schedule calculation
+
+**HTTP Handlers** (`internal/server/handlers_test.go`) - 5.9% coverage:
+- `TestWriteJSON` - JSON response helper
+- `TestHandleHealth` - Health check endpoint
+- `TestHandleThemesList` - Themes listing endpoint
+
+### Adding Tests
+
+When adding tests:
+- Place in `*_test.go` files alongside source
+- Use table-driven tests for multiple cases
+- Mock external dependencies with httptest.NewServer
+- Use httptest.NewRecorder for HTTP handler testing
+- Test both success and error paths
+- Verify HTTP status codes and response bodies
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/docker.yml`):
+### GitHub Actions Workflows
 
+**Build & Test** (`.github/workflows/docker.yml`):
+- **Trigger**: Push to main, pull requests, tags
 - **Build**: Multi-platform Docker images (linux/amd64, linux/arm64)
-- **Test**: Run `go test ./...`
-- **Lint**: Run `golangci-lint`
+- **Test**: Run `go test ./...` with race detection
+- **Lint**: Run `golangci-lint` with 20+ linters
+- **Security**: Run `gosec` with SARIF upload
+- **Coverage**: Upload to Codecov
 - **Registry**: GHCR (ghcr.io/geekxflood/program-director)
 - **Tags**: `latest`, semver (`1.0.0`, `1.0`, `1`), SHA, PR numbers
+
+**Release** (`.github/workflows/release.yml`):
+- **Trigger**: Git tags matching `v*.*.*` (semantic versioning)
+- **Extract**: Version from tag name
+- **Build**: Multi-architecture Docker images with version labels
+- **Release Notes**: Extracted from CHANGELOG.md for the version
+- **GitHub Release**: Automatically created with notes
+- **SBOM**: Generated and uploaded as release artifact
+- **Docker Tags**: Version-specific (`v1.0.0`) and `latest`
+
+### Release Process
+
+See [RELEASING.md](RELEASING.md) for comprehensive release documentation.
+
+**Quick Release:**
+1. Update CHANGELOG.md with new version section
+2. Update Helm chart version in `charts/program-director/Chart.yaml`
+3. Commit changes: `git commit -m "chore: Prepare release v1.1.0"`
+4. Create tag: `git tag -a v1.1.0 -m "Release v1.1.0"`
+5. Push: `git push && git push origin v1.1.0`
+6. GitHub Actions will automatically build and release
 
 ## External Dependencies
 
@@ -348,8 +645,9 @@ GitHub Actions workflow (`.github/workflows/docker.yml`):
 - `github.com/spf13/viper` - Configuration management
 - `github.com/jackc/pgx/v5` - PostgreSQL driver
 - `modernc.org/sqlite` - Pure Go SQLite
+- `github.com/robfig/cron/v3` - Cron scheduler
 - `log/slog` - Structured logging (stdlib)
-- Standard library for HTTP, JSON, context, etc.
+- Standard library for HTTP, JSON, context, net/http, etc.
 
 ## Important Constraints
 
@@ -389,6 +687,36 @@ themes:
     min_rating: 6.0
     max_items: 10
     duration: 300                # Target duration in minutes
+```
+
+### Enabling Trakt Integration
+
+Edit `config.yaml`:
+
+```yaml
+trakt:
+  client_id: "your-trakt-client-id"          # Get from https://trakt.tv/oauth/applications
+  client_secret: "your-trakt-client-secret"  # Optional for basic features
+```
+
+Or set environment variables:
+
+```bash
+export PROGRAMDIR_TRAKT_CLIENT_ID="your-client-id"
+export PROGRAMDIR_TRAKT_CLIENT_SECRET="your-client-secret"
+```
+
+Then use Trakt commands:
+
+```bash
+# Explore trending content
+program-director trakt trending --movies --limit 20
+
+# Search for content
+program-director trakt search "inception"
+
+# Get popular shows
+program-director trakt popular --shows
 ```
 
 ### Extending the Scorer
