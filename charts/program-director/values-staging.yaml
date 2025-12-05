@@ -5,6 +5,14 @@ replicaCount: 1
 image:
   pullPolicy: Always  # Always pull latest for staging
 
+## Temporarily disable readOnlyRootFilesystem for SQLite debugging
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
 resources:
   requests:
     cpu: 200m
