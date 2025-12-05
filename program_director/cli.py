@@ -11,7 +11,7 @@ from .config import load_config
 
 app = typer.Typer(
     name="program-director",
-    help="AI-powered TV channel programmer for ErsatzTV using Radarr/Sonarr metadata",
+    help="AI-powered TV channel programmer for Tunarr using Radarr/Sonarr metadata",
 )
 console = Console()
 
@@ -26,7 +26,7 @@ def generate(
         "-c",
         help="Path to configuration file",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Don't apply to ErsatzTV"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Don't apply to Tunarr"),
 ) -> None:
     """Generate themed playlists using AI."""
     config = load_config(config_file)
@@ -81,9 +81,9 @@ def generate(
                 _print_suggestion(suggestion)
                 if not dry_run:
                     if agent.apply_playlist(suggestion):
-                        console.print("\n[green]Successfully applied to ErsatzTV![/green]")
+                        console.print("\n[green]Successfully applied to Tunarr![/green]")
                     else:
-                        console.print("\n[red]Failed to apply to ErsatzTV[/red]")
+                        console.print("\n[red]Failed to apply to Tunarr[/red]")
             else:
                 console.print("[red]Failed to generate playlist suggestion[/red]")
 
@@ -221,7 +221,7 @@ def themes(
 
 def _print_suggestion(suggestion) -> None:
     """Print a playlist suggestion."""
-    console.print(f"[bold blue]Collection:[/bold blue] {suggestion.collection_name}")
+    console.print(f"[bold blue]Custom Show:[/bold blue] {suggestion.collection_name}")
 
     if suggestion.selected_movies:
         console.print(f"\n[bold]Movies ({len(suggestion.selected_movies)}):[/bold]")

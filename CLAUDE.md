@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Program Director is an AI-powered TV channel programmer that curates themed Smart Collections for ErsatzTV. It uses LangChain with Ollama (local LLM) to intelligently select media from Radarr/Sonarr based on themes.
+Program Director is an AI-powered TV channel programmer that curates themed Custom Shows for Tunarr. It uses LangChain with Ollama (local LLM) to intelligently select media from Radarr/Sonarr based on themes.
 
 ## Development Commands
 
@@ -69,11 +69,11 @@ program-director themes
 
 ### High-Level Data Flow
 
-```
-CLI → Config → Agent → [MediaLibrary, LLM, ErsatzTVClient]
+```text
+CLI → Config → Agent → [MediaLibrary, LLM, TunarrClient]
                         ↓           ↓          ↓
-                    Radarr/     Ollama    ErsatzTV
-                    Sonarr               Smart Collections
+                    Radarr/     Ollama      Tunarr
+                    Sonarr               Custom Shows
 ```
 
 The workflow:
@@ -84,14 +84,14 @@ The workflow:
 4. `MediaLibrary` fetches and caches media metadata from Radarr/Sonarr
 5. Agent generates LLM prompt with theme + media summary
 6. Ollama LLM selects matching content (returns JSON)
-7. `ErsatzTVClient` creates/updates Smart Collection
+7. `TunarrClient` creates/updates Custom Show
 
 ### Module Responsibilities
 
 **[config.py](program_director/config.py)** - Configuration management
 
 - Loads YAML config and merges with environment variables
-- Pydantic models for validation: `AgentConfig`, `ThemeConfig`, `OllamaConfig`, `ErsatzTVConfig`, `RadarrConfig`, `SonarrConfig`
+- Pydantic models for validation: `AgentConfig`, `ThemeConfig`, `OllamaConfig`, `TunarrConfig`, `RadarrConfig`, `SonarrConfig`
 - Environment variables override config file values
 - Default config path: `/app/config/config.yaml` (Docker-friendly)
 
@@ -111,19 +111,18 @@ The workflow:
 - `PlaylistAgent`: Main workflow coordinator
   - Initializes ChatOllama with 8192 token context window
   - `generate_playlist()`: LLM-powered selection based on theme
-  - `create_smart_collection_query()`: Converts titles to ErsatzTV query format
-  - `apply_playlist()`: Creates/updates Smart Collection (idempotent)
+  - `get_selected_titles()`: Extracts titles from LLM suggestion
+  - `apply_playlist()`: Creates/updates Custom Show (idempotent)
 - `PlaylistSuggestion`: Pydantic model for LLM JSON output
 - System prompt instructs LLM to curate with specific criteria (7.0+ ratings, variety, duration targets)
 - Temperature: 0.7 for balanced creativity
 
-**[ersatztv_client.py](program_director/ersatztv_client.py)** - ErsatzTV API
+**[tunarr_client.py](program_director/tunarr_client.py)** - Tunarr API
 
-- REST API client for Smart Collections
-- Methods: `get_channels()`, `get_smart_collections()`, `create_smart_collection()`, `update_smart_collection()`, `delete_smart_collection()`
-- Query format: `title contains "Movie Title" OR title contains "Show Title"`
-- **Important**: Collection names limited to 50 characters (ErsatzTV constraint)
-- POST endpoint expects capitalized `Name` and `Query` fields
+- REST API client for Custom Shows
+- Methods: `get_custom_shows()`, `get_custom_show()`, `create_custom_show()`, `update_custom_show()`, `delete_custom_show()`
+- Custom Shows store programs (movies, episodes, tracks) for channel scheduling
+- Uses httpx with 30s timeout and context manager pattern
 
 **[cli.py](program_director/cli.py)** - Command-line interface
 
@@ -144,19 +143,12 @@ The agent provides the LLM with:
 4. Specific instructions: prefer 7.0+ ratings, ensure variety, match duration target
 5. Enforces JSON schema output with `JsonOutputParser`
 
-### ErsatzTV Query Generation
+### Idempotent Custom Show Creation
 
-- Cleans movie titles by removing year suffixes (e.g., "Movie (2020)" → "Movie")
-- Escapes double quotes in titles for query safety
-- Joins multiple titles with "OR" for multi-title matching
-- Format: `title contains "Title1" OR title contains "Title2"`
+The agent checks if a custom show with the same name exists:
 
-### Idempotent Collection Creation
-
-The agent checks if a collection with the same name exists:
-
-- If exists: updates the existing collection with new query
-- If not: creates a new collection
+- If exists: updates the existing custom show
+- If not: creates a new custom show
 - This ensures re-running the same theme updates rather than duplicates
 
 ### Configuration Priority
@@ -173,7 +165,7 @@ Required environment variables:
 Optional overrides:
 
 - `OLLAMA_URL`, `OLLAMA_MODEL`
-- `ERSATZTV_URL`, `RADARR_URL`, `SONARR_URL`
+- `TUNARR_URL`, `RADARR_URL`, `SONARR_URL`
 
 ### Resource Management
 
@@ -213,7 +205,7 @@ GitHub Actions workflow (`.github/workflows/docker.yml`):
 - **Ollama**: Local LLM runtime (default model: `dolphin-llama3:8b`)
 - **Radarr**: Movie library manager (API key required)
 - **Sonarr**: TV/anime library manager (API key required)
-- **ErsatzTV**: IPTV server for custom channels
+- **Tunarr**: IPTV server for custom channels
 
 **Key Libraries**:
 
@@ -226,11 +218,10 @@ GitHub Actions workflow (`.github/workflows/docker.yml`):
 
 ## Important Constraints
 
-1. **ErsatzTV collection names**: Maximum 50 characters
-2. **API timeouts**: 30 seconds for Radarr/Sonarr requests
-3. **LLM context window**: 8192 tokens
-4. **Docker user**: Non-root user `program-director` (UID 1000)
-5. **Radarr/Sonarr**: Only fetches media with files (excludes monitored-but-missing)
+1. **API timeouts**: 30 seconds for Radarr/Sonarr requests
+2. **LLM context window**: 8192 tokens
+3. **Docker user**: Non-root user `program-director` (UID 1000)
+4. **Radarr/Sonarr**: Only fetches media with files (excludes monitored-but-missing)
 
 ## Common Patterns
 

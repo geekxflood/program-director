@@ -24,10 +24,10 @@ class OllamaConfig(BaseModel):
     model: str = Field(default="llama3:8b")
 
 
-class ErsatzTVConfig(BaseModel):
-    """ErsatzTV API configuration."""
+class TunarrConfig(BaseModel):
+    """Tunarr API configuration."""
 
-    url: str = Field(default="http://localhost:8409")
+    url: str = Field(default="http://localhost:8000")
 
 
 class RadarrConfig(BaseModel):
@@ -48,7 +48,7 @@ class AgentConfig(BaseModel):
     """Main agent configuration."""
 
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
-    ersatztv: ErsatzTVConfig = Field(default_factory=ErsatzTVConfig)
+    tunarr: TunarrConfig = Field(default_factory=TunarrConfig)
     radarr: RadarrConfig = Field(default_factory=RadarrConfig)
     sonarr: SonarrConfig = Field(default_factory=SonarrConfig)
     themes: list[ThemeConfig] = Field(default_factory=list)
@@ -68,8 +68,8 @@ def load_config(config_path: Path | None = None) -> AgentConfig:
         config_data.setdefault("ollama", {})["url"] = ollama_url
     if ollama_model := os.getenv("OLLAMA_MODEL"):
         config_data.setdefault("ollama", {})["model"] = ollama_model
-    if ersatztv_url := os.getenv("ERSATZTV_URL"):
-        config_data.setdefault("ersatztv", {})["url"] = ersatztv_url
+    if tunarr_url := os.getenv("TUNARR_URL"):
+        config_data.setdefault("tunarr", {})["url"] = tunarr_url
     if radarr_url := os.getenv("RADARR_URL"):
         config_data.setdefault("radarr", {})["url"] = radarr_url
     if radarr_api_key := os.getenv("RADARR_API_KEY"):
