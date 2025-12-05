@@ -1,0 +1,111 @@
+# Program Director Configuration
+# Copy to config.yaml and update with your settings
+
+# Debug logging
+debug: false
+
+# Database configuration
+database:
+  driver: "sqlite"  # "postgres" or "sqlite"
+
+  # PostgreSQL settings (if driver is "postgres")
+  postgres:
+    host: "postgres"
+    port: 5432
+    database: "program_director"
+    user: "program_director"
+    password: ""  # Use POSTGRES_PASSWORD env var
+    sslmode: "disable"
+
+  # SQLite settings (if driver is "sqlite")
+  sqlite:
+    path: "/app/data/program-director.db"
+
+# Radarr configuration
+radarr:
+  url: "http://radarr:7878"
+  api_key: ""  # Use RADARR_API_KEY env var
+
+# Sonarr configuration
+sonarr:
+  url: "http://sonarr:8989"
+  api_key: ""  # Use SONARR_API_KEY env var
+
+# Tunarr configuration
+tunarr:
+  url: "http://tunarr:8000"
+
+# Ollama LLM configuration
+ollama:
+  url: "http://ollama:11434"
+  model: "dolphin-llama3:8b"
+  temperature: 0.7
+  num_ctx: 8192
+
+# Cooldown settings (days before media can be replayed)
+cooldown:
+  movie_days: 30
+  series_days: 14
+  anime_days: 14
+
+# HTTP Server settings (for serve command)
+server:
+  port: 8080
+  enable_scheduler: false
+  metrics_enabled: true
+  shutdown_timeout: 30
+
+# Theme definitions
+themes:
+  # Example: Sci-Fi Night
+  - name: "sci-fi-night"
+    description: "Evening programming featuring science fiction content"
+    channel_id: "your-tunarr-channel-id"  # Get from Tunarr API
+    schedule: "0 20 * * *"  # 8 PM daily (cron format, for scheduler mode)
+    media_types:
+      - "movie"
+      - "series"
+    genres:
+      - "Science Fiction"
+      - "Sci-Fi"
+    keywords:
+      - "space"
+      - "future"
+      - "robot"
+      - "AI"
+    min_rating: 6.0
+    max_items: 10
+    duration: 300  # Target duration in minutes
+
+  # Example: Horror Weekend
+  - name: "horror-weekend"
+    description: "Weekend horror movie marathon"
+    channel_id: "another-tunarr-channel-id"
+    schedule: "0 21 * * 5-6"  # 9 PM Friday-Saturday
+    media_types:
+      - "movie"
+    genres:
+      - "Horror"
+      - "Thriller"
+    keywords:
+      - "scary"
+      - "suspense"
+    min_rating: 5.0
+    max_items: 5
+    duration: 600
+
+  # Example: Anime Block
+  - name: "anime-block"
+    description: "Daily anime programming"
+    channel_id: "anime-channel-id"
+    schedule: "0 18 * * *"  # 6 PM daily
+    media_types:
+      - "anime"
+    genres:
+      - "Animation"
+      - "Anime"
+      - "Action"
+    keywords: []
+    min_rating: 7.0
+    max_items: 8
+    duration: 180
