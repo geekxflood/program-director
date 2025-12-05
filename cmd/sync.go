@@ -2,11 +2,18 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/spf13/cobra"
+
+	"github.com/geekxflood/program-director/internal/clients/radarr"
+	"github.com/geekxflood/program-director/internal/clients/sonarr"
+	"github.com/geekxflood/program-director/internal/database"
+	"github.com/geekxflood/program-director/internal/database/repository"
+	"github.com/geekxflood/program-director/internal/services/media"
 )
 
 var (
@@ -75,52 +82,98 @@ func runSync(cmd *cobra.Command, args []string) error {
 	)
 
 	logger.Debug("initializing sync services")
-	// TODO: Initialize database and sync service
-	// This will be implemented when media sync service is wired up
-	logger.Warn("sync service not yet implemented - placeholder only")
+
+	// Initialize database
+	db, err := database.New(ctx, &cfg.Database, logger)
+	if err != nil {
+		logger.Error("failed to initialize database", "error", err)
+		return fmt.Errorf("failed to initialize database: %w", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Error("failed to close database", "error", err)
+		}
+	}()
+
+	// Run migrations
+	logger.Debug("running database migrations")
+	if err := db.Migrate(ctx); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	// Initialize repository
+	mediaRepo := repository.NewMediaRepository(db)
+
+	// Initialize API clients
+	radarrClient := radarr.New(&cfg.Radarr)
+	sonarrClient := sonarr.New(&cfg.Sonarr)
+
+	// Create sync service
+	syncService := media.NewSyncService(radarrClient, sonarrClient, mediaRepo, logger)
+
+	var results []media.SyncResult
 
 	if syncMovies {
 		logger.Info("syncing movies from Radarr",
 			"url", cfg.Radarr.URL,
 		)
-		logger.Debug("fetching movie list from Radarr API")
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			// syncService.SyncMovies(ctx)
-			logger.Debug("movie sync would happen here")
+		result, err := syncService.SyncMovies(ctx, syncCleanup)
+		if err != nil {
+			logger.Error("movie sync failed", "error", err)
+			return fmt.Errorf("movie sync failed: %w", err)
 		}
-		logger.Info("movie sync completed", "count", 0)
+		results = append(results, *result)
 	}
 
 	if syncSeries {
 		logger.Info("syncing series from Sonarr",
 			"url", cfg.Sonarr.URL,
 		)
-		logger.Debug("fetching series list from Sonarr API")
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			// syncService.SyncSeries(ctx)
-			logger.Debug("series sync would happen here")
+		result, err := syncService.SyncSeries(ctx, syncCleanup)
+		if err != nil {
+			logger.Error("series sync failed", "error", err)
+			return fmt.Errorf("series sync failed: %w", err)
 		}
-		logger.Info("series sync completed", "count", 0)
+		results = append(results, *result)
 	}
 
-	if syncCleanup {
-		logger.Info("cleaning up removed media")
-		logger.Debug("checking for media no longer in source")
-		// syncService.Cleanup(ctx)
-		logger.Debug("cleanup would happen here")
-		logger.Info("cleanup completed", "removed", 0)
+	// Calculate totals
+	totalCreated := 0
+	totalUpdated := 0
+	totalDeleted := 0
+	totalErrors := 0
+
+	for _, result := range results {
+		totalCreated += result.Created
+		totalUpdated += result.Updated
+		totalDeleted += result.Deleted
+		totalErrors += result.Errors
 	}
 
 	logger.Info("media sync complete",
-		"movies_synced", 0,
-		"series_synced", 0,
-		"items_cleaned", 0,
+		"created", totalCreated,
+		"updated", totalUpdated,
+		"deleted", totalDeleted,
+		"errors", totalErrors,
 	)
+
+	// Display summary
+	fmt.Println()
+	fmt.Println("Sync Summary")
+	fmt.Println("============")
+	for _, result := range results {
+		fmt.Printf("\n%s:\n", result.Source)
+		fmt.Printf("  Created:  %d\n", result.Created)
+		fmt.Printf("  Updated:  %d\n", result.Updated)
+		if syncCleanup {
+			fmt.Printf("  Deleted:  %d\n", result.Deleted)
+		}
+		if result.Errors > 0 {
+			fmt.Printf("  Errors:   %d\n", result.Errors)
+		}
+		fmt.Printf("  Duration: %s\n", result.Duration)
+	}
+	fmt.Println()
+
 	return nil
 }
