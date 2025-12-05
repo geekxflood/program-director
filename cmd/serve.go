@@ -8,6 +8,18 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+
+	"github.com/geekxflood/program-director/internal/clients/ollama"
+	"github.com/geekxflood/program-director/internal/clients/radarr"
+	"github.com/geekxflood/program-director/internal/clients/sonarr"
+	"github.com/geekxflood/program-director/internal/clients/tunarr"
+	"github.com/geekxflood/program-director/internal/database"
+	"github.com/geekxflood/program-director/internal/database/repository"
+	"github.com/geekxflood/program-director/internal/server"
+	"github.com/geekxflood/program-director/internal/services/cooldown"
+	"github.com/geekxflood/program-director/internal/services/media"
+	"github.com/geekxflood/program-director/internal/services/playlist"
+	"github.com/geekxflood/program-director/internal/services/similarity"
 )
 
 var (
@@ -67,20 +79,83 @@ func runServe(cmd *cobra.Command, args []string) error {
 		"metrics", serveMetricsEnabled,
 	)
 
-	// TODO: Initialize all services
-	// - Database connection
-	// - API clients (Radarr, Sonarr, Tunarr, Ollama)
-	// - Services (sync, similarity, cooldown, playlist)
-	// - HTTP handlers
-	// - Prometheus metrics
-	// - Optional scheduler
+	logger.Debug("initializing database connection")
 
-	// Placeholder: print server info
-	fmt.Printf("Server starting on http://0.0.0.0:%d\n", servePort)
+	// Initialize database
+	db, err := database.New(ctx, &cfg.Database, logger)
+	if err != nil {
+		logger.Error("failed to initialize database", "error", err)
+		return fmt.Errorf("failed to initialize database: %w", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Error("failed to close database", "error", err)
+		}
+	}()
+
+	// Run migrations
+	logger.Debug("running database migrations")
+	if err := db.Migrate(ctx); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	logger.Debug("initializing repositories")
+
+	// Initialize repositories
+	mediaRepo := repository.NewMediaRepository(db)
+	historyRepo := repository.NewHistoryRepository(db)
+	cooldownRepo := repository.NewCooldownRepository(db)
+
+	logger.Debug("initializing API clients",
+		"radarr_url", cfg.Radarr.URL,
+		"sonarr_url", cfg.Sonarr.URL,
+		"tunarr_url", cfg.Tunarr.URL,
+		"ollama_url", cfg.Ollama.URL,
+	)
+
+	// Initialize API clients
+	radarrClient := radarr.New(&cfg.Radarr)
+	sonarrClient := sonarr.New(&cfg.Sonarr)
+	tunarrClient := tunarr.New(&cfg.Tunarr)
+	ollamaClient := ollama.New(&cfg.Ollama)
+
+	logger.Debug("initializing services")
+
+	// Initialize services
+	syncService := media.NewSyncService(radarrClient, sonarrClient, mediaRepo, logger)
+	cooldownManager := cooldown.NewManager(cooldownRepo, historyRepo, &cfg.Cooldown, logger)
+	similarityScorer := similarity.NewScorer(mediaRepo, ollamaClient, logger)
+	playlistGenerator := playlist.NewGenerator(tunarrClient, similarityScorer, cooldownManager, logger)
+
+	logger.Debug("initializing HTTP server")
+
+	// Create HTTP server
+	serverCfg := &server.Config{
+		Port:           servePort,
+		MetricsEnabled: serveMetricsEnabled,
+	}
+
+	httpServer := server.NewServer(
+		cfg,
+		serverCfg,
+		mediaRepo,
+		historyRepo,
+		cooldownRepo,
+		syncService,
+		playlistGenerator,
+		cooldownManager,
+		logger,
+	)
+
+	// Print server info
+	fmt.Printf("\nServer starting on http://0.0.0.0:%d\n", servePort)
 	fmt.Println()
 	fmt.Println("Endpoints:")
 	fmt.Println("  GET  /health              - Health check")
-	fmt.Println("  GET  /metrics             - Prometheus metrics")
+	fmt.Println("  GET  /ready               - Readiness check")
+	if serveMetricsEnabled {
+		fmt.Println("  GET  /metrics             - Prometheus metrics")
+	}
 	fmt.Println("  GET  /api/v1/media        - List media")
 	fmt.Println("  POST /api/v1/media/sync   - Trigger sync")
 	fmt.Println("  GET  /api/v1/themes       - List themes")
@@ -89,19 +164,20 @@ func runServe(cmd *cobra.Command, args []string) error {
 	fmt.Println("  GET  /api/v1/history      - Play history")
 	fmt.Println("  GET  /api/v1/cooldowns    - Current cooldowns")
 	fmt.Println("  POST /api/v1/webhooks     - Webhook triggers")
+	fmt.Println()
 
 	if serveEnableScheduler {
 		logger.Info("scheduler enabled",
 			"themes", len(cfg.Themes),
 		)
-		// scheduler.Start()
+		// TODO: Initialize and start scheduler
+		logger.Warn("scheduler not yet implemented")
 	}
 
-	// TODO: Start HTTP server
-	// server.ListenAndServe(ctx)
-
-	// Block until context cancelled
-	<-ctx.Done()
+	// Start HTTP server (blocking)
+	if err := httpServer.Start(ctx, servePort); err != nil {
+		return fmt.Errorf("server error: %w", err)
+	}
 
 	logger.Info("server shutdown complete")
 	return nil
