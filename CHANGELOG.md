@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Unit tests for Trakt client (34.5% coverage)
+- Unit tests for scheduler (42.6% coverage)
+- Unit tests for HTTP server handlers (5.9% coverage)
+
+### Changed
+
+### Fixed
+
+### Security
+
 ## [1.0.0] - 2025-12-05
 
 ### Added
