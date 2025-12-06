@@ -2,8 +2,8 @@ apiVersion: v2
 name: program-director
 description: AI-powered TV channel programmer for Tunarr
 type: application
-version: 1.0.1
-appVersion: "1.0.1"
+version: 1.0.2
+appVersion: "1.0.2"
 keywords:
   - media
   - automation
