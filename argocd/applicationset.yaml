@@ -19,14 +19,14 @@ spec:
           - cluster: in-cluster
             namespace: program-director
             environment: production
-            repoURL: https://github.com/geekxflood/program-director.git
-            targetRevision: HEAD
+            repoURL: https://github.com/geekxflood/helm-charts.git
+            targetRevision: main
             valueFiles: values-production.yaml
 
           - cluster: in-cluster
             namespace: program-director-staging
             environment: staging
-            repoURL: https://github.com/geekxflood/program-director.git
+            repoURL: https://github.com/geekxflood/helm-charts.git
             targetRevision: main
             valueFiles: values-staging.yaml
 
